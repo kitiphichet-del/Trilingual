@@ -63,6 +63,28 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "trilingual.db", 
         refreshSessions()
     }
 
+    /** Delete a session and all its transcript rows atomically; never leave orphan phrases. */
+    @Synchronized fun deleteMeeting(meetingId: Long): Boolean {
+        require(meetingId > 0L) { "Invalid meeting ID" }
+        val db = writableDatabase
+        db.beginTransaction()
+        val deleted = try {
+            val where = arrayOf(meetingId.toString())
+            db.delete("phrases", "meeting_id=?", where)
+            val removed = db.delete("meetings", "id=?", where) > 0
+            db.setTransactionSuccessful()
+            removed
+        } finally {
+            db.endTransaction()
+        }
+        if (visibleMeetingId == meetingId) {
+            visibleMeetingId = 0L
+            _phrases.value = emptyList()
+        }
+        refreshSessions()
+        return deleted
+    }
+
     @Synchronized fun refreshSessions() {
         val result = mutableListOf<Meeting>()
         readableDatabase.rawQuery("SELECT id,title,mode,created_at,summary FROM meetings ORDER BY id DESC LIMIT 150", null).use { cur ->

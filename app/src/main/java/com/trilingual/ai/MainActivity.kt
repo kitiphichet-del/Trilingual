@@ -46,7 +46,9 @@ import com.trilingual.ai.translation.DeviceTranslator
 import com.trilingual.ai.translation.Notes
 import com.trilingual.ai.translation.OnlineTextAi
 import com.trilingual.ai.util.Language
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -114,6 +116,8 @@ class MainActivity : ComponentActivity() {
         var selectedMode by rememberSaveable { mutableStateOf("conversation") }
         var selectedLanguage by rememberSaveable { mutableStateOf("th") }
         var uiError by rememberSaveable { mutableStateOf("") }
+        var pendingDeletion by remember { mutableStateOf<Meeting?>(null) }
+        var deletingId by remember { mutableLongStateOf(0L) }
         val current = meetings.firstOrNull { it.id == viewing }
         val last = phrases.lastOrNull()
         val scope = rememberCoroutineScope()
@@ -129,7 +133,45 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(live.meetingId) {
             if (live.meetingId != 0L) { viewing = live.meetingId; app.store.selectMeeting(viewing) }
         }
-        LaunchedEffect(viewing) { if (viewing != 0L) app.store.selectMeeting(viewing) }
+        LaunchedEffect(viewing) { app.store.selectMeeting(viewing) }
+
+        // A confirmation is required: deleting a saved session also removes all its phrases.
+        pendingDeletion?.let { meeting ->
+            AlertDialog(
+                onDismissRequest = { if (deletingId == 0L) pendingDeletion = null },
+                icon = { Icon(Icons.Default.DeleteOutline, null) },
+                title = { Text("ลบบันทึกนี้หรือไม่?") },
+                text = { Text("${meeting.title}\nข้อความต้นฉบับ คำแปล และสรุปทั้งหมดในรายการนี้จะถูกลบถาวรและไม่สามารถกู้คืนได้") },
+                confirmButton = {
+                    TextButton(
+                        enabled = deletingId == 0L,
+                        onClick = {
+                            if (live.running && live.meetingId == meeting.id) {
+                                uiError = "กรุณาหยุดบันทึกก่อนลบรายการที่กำลังใช้งาน"
+                                pendingDeletion = null
+                            } else {
+                                deletingId = meeting.id
+                                scope.launch {
+                                    val result = runCatching {
+                                        withContext(Dispatchers.IO) { app.store.deleteMeeting(meeting.id) }
+                                    }
+                                    if (result.getOrDefault(false)) {
+                                        if (viewing == meeting.id) viewing = 0L
+                                    } else {
+                                        uiError = "ลบรายการไม่สำเร็จ: ${result.exceptionOrNull()?.message ?: "ไม่พบรายการ"}"
+                                    }
+                                    deletingId = 0L
+                                    pendingDeletion = null
+                                }
+                            }
+                        }
+                    ) { Text(if (deletingId != 0L) "กำลังลบ…" else "ลบถาวร", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(enabled = deletingId == 0L, onClick = { pendingDeletion = null }) { Text("ยกเลิก") }
+                }
+            )
+        }
 
         if (pip) {
             Box(Modifier.fillMaxSize().background(Color(0xFF14213D)).padding(8.dp), contentAlignment = Alignment.Center) {
@@ -145,7 +187,7 @@ class MainActivity : ComponentActivity() {
                     Column { Text("TriLingual AI", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text("ไทย  ·  English  ·  简体中文", style = MaterialTheme.typography.labelSmall) }
                     Spacer(Modifier.weight(1f))
-                    Text("v0.1.0", color = Color.Gray, fontSize = 12.sp)
+                    Text("v0.1.1", color = Color.Gray, fontSize = 12.sp)
                 }
             } },
             bottomBar = { NavigationBar {
@@ -217,12 +259,25 @@ class MainActivity : ComponentActivity() {
                             Text("ประวัติการประชุมและบทสนทนา", style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(10.dp))
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (meetings.isEmpty()) item { Text("ยังไม่มีบันทึก", color = Color.Gray, modifier = Modifier.padding(12.dp)) }
                                 items(meetings, key = { it.id }) { meeting ->
                                     ElevatedCard(onClick = { viewing = meeting.id; page = "presentation" }) {
                                         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Icon(if (meeting.mode == "meeting") Icons.Default.Groups else Icons.Default.Chat, null)
                                             Spacer(Modifier.width(12.dp))
                                             Column(Modifier.weight(1f)) { Text(meeting.title, fontWeight = FontWeight.Medium); Text(if (meeting.summary.isBlank()) "แตะเพื่อดูรายละเอียด/สรุป" else "มีสรุปแล้ว", fontSize = 12.sp, color = Color.Gray) }
+                                            IconButton(
+                                                enabled = deletingId == 0L,
+                                                onClick = {
+                                                    if (live.running && live.meetingId == meeting.id) {
+                                                        uiError = "กรุณาหยุดบันทึกก่อนลบรายการที่กำลังใช้งาน"
+                                                    } else {
+                                                        pendingDeletion = meeting
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.DeleteOutline, contentDescription = "ลบ ${meeting.title}", tint = MaterialTheme.colorScheme.error)
+                                            }
                                             Icon(Icons.Default.ChevronRight, null)
                                         }
                                     }

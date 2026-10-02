@@ -1,7 +1,14 @@
-# TriLingual AI Android — v0.1.0 (Hybrid starter)
+# TriLingual AI Android — v0.1.1 (Hybrid starter)
 
 โครงการแอปแปลเสียงไทย/English/中文（简体） เป็นโค้ด Android จริง ไม่ใช่ภาพตัวอย่างเว็บ
 **สถานะ: source delivered; CI build and real-phone end-to-end tests NOT YET VERIFIED.**
+
+## เปลี่ยนแปลง v0.1.1
+
+- หน้าประวัติ: เพิ่มปุ่มถังขยะในบัตรบันทึกแต่ละรายการ พร้อมหน้าต่างยืนยันก่อนลบถาวร
+- ลบบันทึกพร้อมข้อความต้นฉบับ คำแปล และสรุปที่เก็บใน SQLite ภายใน transaction เดียว
+- ไม่อนุญาตให้ลบรายการที่กำลังบันทึกเสียงอยู่ ต้องหยุดการบันทึกก่อน
+- เมื่อไม่มีรายการแล้วจะแสดงข้อความ “ยังไม่มีบันทึก”; ลบรายการที่กำลังเปิดอยู่แล้วล้างรายการที่เลือก
 
 ## สิ่งที่สร้างแล้ว
 
@@ -36,7 +43,7 @@
 
 1. แตกไฟล์ `TriLingualAI-source.zip` แล้วอัปโหลด **เนื้อหาภายใน** ไปยัง repository GitHub ใหม่ (อย่าทับโปรเจ็กต์เดิม) โดยคงโฟลเดอร์ `.github/workflows/`.
 2. กดแท็บ `Actions` → `Build Android APK` → `Run workflow`, หรือ push branch `main`.
-3. เมื่อ workflow ผ่าน (เครื่องหมายเขียว) เข้า run → `Artifacts` → ดาวน์โหลด `TriLingualAI-debug-v0.1.0`.
+3. เมื่อ workflow ผ่าน (เครื่องหมายเขียว) เข้า run → `Artifacts` → ดาวน์โหลด `TriLingualAI-debug-v0.1.1`.
 4. แตก ZIP artifact จะพบ `app-debug.apk`, ส่งเข้า Android แล้วติดตั้งจากแหล่งที่เชื่อถือได้. Debug APK สำหรับทดสอบ ยังไม่ใช่ build สำหรับเผยแพร่ Play Store.
 5. ถ้าขั้นตอน `:app:assembleDebug` หรือ unit tests ไม่ผ่าน ให้ดู Logs ใน GitHub Actions แล้วแก้ที่ไฟล์ต้นเหตุ. ห้ามถือว่า ZIP source คือ APK.
 
