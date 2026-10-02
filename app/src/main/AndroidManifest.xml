@@ -10,7 +10,7 @@
     <application
         android:name=".TriLingualApp"
         android:allowBackup="false"
-        android:label="TriLingual AI"
+        android:label="${appDisplayName}"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">

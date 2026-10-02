@@ -16,7 +16,18 @@ android {
         versionName = "0.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    buildTypes { release { isMinifyEnabled = false } }
+    buildTypes {
+        getByName("debug") {
+            // Previous APKs were signed on ephemeral CI machines and cannot upgrade in place.
+            // A different package keeps the user's existing history in the old installed app.
+            applicationIdSuffix = ".preview"
+            manifestPlaceholders["appDisplayName"] = "TriLingual AI (ทดสอบ)"
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            manifestPlaceholders["appDisplayName"] = "TriLingual AI"
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
