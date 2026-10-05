@@ -187,7 +187,7 @@ class MainActivity : ComponentActivity() {
                     Column { Text("TriLingual AI", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text("ไทย  ·  English  ·  简体中文", style = MaterialTheme.typography.labelSmall) }
                     Spacer(Modifier.weight(1f))
-                    Text("v0.1.2", color = Color.Gray, fontSize = 12.sp)
+                    Text("v0.1.3", color = Color.Gray, fontSize = 12.sp)
                 }
             } },
             bottomBar = { NavigationBar {
@@ -243,12 +243,40 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                     if (live.running) {
-                                        Spacer(Modifier.height(6.dp))
-                                        Text("กำหนดผู้พูด (ด้วยตนเอง)", style = MaterialTheme.typography.labelSmall)
-                                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            (1..4).forEach { n -> FilterChip(selected = live.speaker == n, onClick = {
-                                                startService(Intent(this@MainActivity, RecognitionService::class.java).setAction(RecognitionService.ACTION_SPEAKER).putExtra(RecognitionService.EXTRA_SPEAKER, n))
-                                            }, label = { Text("คน $n") }) }
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text("ผู้พูดอัตโนมัติ", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                                Text(
+                                                    if (live.autoSpeaker) "เปิด · ระบบจัดหมายเลขผู้พูดให้อัตโนมัติ"
+                                                    else "ปิด · เลือกผู้พูดด้วยตนเอง",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color.Gray
+                                                )
+                                            }
+                                            Switch(
+                                                checked = live.autoSpeaker,
+                                                onCheckedChange = { enabled ->
+                                                    startService(
+                                                        Intent(this@MainActivity, RecognitionService::class.java)
+                                                            .setAction(RecognitionService.ACTION_AUTO_SPEAKER)
+                                                            .putExtra(RecognitionService.EXTRA_AUTO_SPEAKER, enabled)
+                                                    )
+                                                }
+                                            )
+                                        }
+                                        if (!live.autoSpeaker) {
+                                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                (1..4).forEach { n -> FilterChip(selected = live.speaker == n, onClick = {
+                                                    startService(Intent(this@MainActivity, RecognitionService::class.java).setAction(RecognitionService.ACTION_SPEAKER).putExtra(RecognitionService.EXTRA_SPEAKER, n))
+                                                }, label = { Text("คน $n") }) }
+                                            }
+                                        } else {
+                                            Text(
+                                                "ขณะนี้: คน ${live.speaker} · รุ่นนี้แยกอัตโนมัติจากภาษาที่ตรวจพบ; คนหลายคนที่พูดภาษาเดียวกันอาจถูกรวมเป็นคนเดียว",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
                                         }
                                     }
                                     if (live.partial.isNotBlank()) Text("ฟังอยู่: ${live.partial}", color = Color.DarkGray, style = MaterialTheme.typography.bodyMedium)
@@ -419,7 +447,7 @@ class MainActivity : ComponentActivity() {
             Text("คำบรรยายลอย", style = MaterialTheme.typography.titleMedium)
             OutlinedButton(onClick = { onOverlay(!prefs.overlayEnabled) }) { Text(if (prefs.overlayEnabled) "ปิด Overlay" else "ขอสิทธิ์และเปิด Overlay") }
             Text("ต้องอนุญาต ‘แสดงทับแอปอื่น’ ในการตั้งค่า Android; PiP ใช้ได้จากหน้า ‘นำเสนอ’", fontSize = 12.sp, color = Color.Gray)
-            Text("เวอร์ชัน 0.1.2 · ปรับปรุงจีน → ไทยและ Hybrid speech fallback", color = Color.Gray, fontSize = 12.sp)
+            Text("เวอร์ชัน 0.1.3 · ฟังต่อเนื่องแก้รหัส 7 + ผู้พูดอัตโนมัติ", color = Color.Gray, fontSize = 12.sp)
         }
     }
 }
