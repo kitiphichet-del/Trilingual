@@ -47,6 +47,7 @@ class RecognitionService : Service(), RecognitionListener {
     private var listening = false
     private var stopped = true
     private var useDevice = false
+    private var systemFallbackUsed = false
     private var language = "th"
     private var detected = "th"
     private var speaker = 1
@@ -77,6 +78,7 @@ class RecognitionService : Service(), RecognitionListener {
                 detected = if (language == "auto") "th" else language
                 speaker = 1
                 useDevice = app.settings.onDevice
+                systemFallbackUsed = false
                 meetingId = app.store.newMeeting(intent.getStringExtra(EXTRA_MODE) ?: "conversation")
                 app.live.update { it.copy(meetingId = meetingId, running = true, paused = false,
                     mode = intent.getStringExtra(EXTRA_MODE) ?: "conversation", language = language,
@@ -101,6 +103,8 @@ class RecognitionService : Service(), RecognitionListener {
             ACTION_LANGUAGE -> if (!stopped) {
                 language = intent.getStringExtra(EXTRA_LANGUAGE) ?: "th"
                 detected = if (language == "auto") "th" else language
+                systemFallbackUsed = false
+                useDevice = app.settings.onDevice
                 app.live.update { it.copy(language = language, partial = "") }
                 listening = false
                 recognizer?.cancel()
@@ -151,6 +155,22 @@ class RecognitionService : Service(), RecognitionListener {
         }
     }
 
+    private fun fallbackToSystemRecognizer(reason: String): Boolean {
+        if (!useDevice || systemFallbackUsed || stopped) return false
+        systemFallbackUsed = true
+        useDevice = false
+        listening = false
+        runCatching { recognizer?.cancel() }
+        app.live.update { it.copy(
+            partial = "",
+            status = "$reason · กำลังสลับเป็นบริการรู้จำเสียงของระบบ (Hybrid)"
+        ) }
+        createRecognizer()
+        if (stopped || recognizer == null) return false
+        scheduleRestart(450)
+        return true
+    }
+
     private fun startRecognition() {
         if (stopped || app.live.view.value.paused || listening || recognizer == null) return
         listening = true
@@ -195,12 +215,18 @@ class RecognitionService : Service(), RecognitionListener {
     override fun onError(error: Int) {
         if (stopped || app.live.view.value.paused) return
         listening = false
-        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS || error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED) {
-            app.live.update { it.copy(status = "ไม่สามารถฟังภาษานี้ได้ (ข้อผิดพลาด $error)") }
+        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+            app.live.update { it.copy(status = "ไม่มีสิทธิ์ใช้ไมโครโฟน (ข้อผิดพลาด $error)") }
             endSession(); return
         }
-        if (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE && useDevice) {
-            app.live.update { it.copy(status = "ต้องติดตั้งชุดเสียงภาษานี้ในระบบโทรศัพท์") }
+        if ((error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+                error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) && useDevice) {
+            val name = Language.label(if (language == "auto") detected else language)
+            if (fallbackToSystemRecognizer("ชุดรู้จำเสียงออฟไลน์ $name ไม่พร้อม")) return
+        }
+        if (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+            error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
+            app.live.update { it.copy(status = "บริการรู้จำเสียงของเครื่องไม่รองรับ ${Language.label(if (language == "auto") detected else language)} (รหัส $error)") }
             endSession(); return
         }
         // No-match and end-of-speech are expected during an ongoing conversation.

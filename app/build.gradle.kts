@@ -12,16 +12,24 @@ android {
         applicationId = "com.trilingual.ai"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    signingConfigs {
+        create("previewStable") {
+            storeFile = file("preview-debug.jks")
+            storePassword = "trilingual-preview"
+            keyAlias = "trilingual-preview"
+            keyPassword = "trilingual-preview"
+        }
     }
     buildTypes {
         getByName("debug") {
-            // Previous APKs were signed on ephemeral CI machines and cannot upgrade in place.
-            // A different package keeps the user's existing history in the old installed app.
-            applicationIdSuffix = ".preview"
-            manifestPlaceholders["appDisplayName"] = "TriLingual AI (ทดสอบ)"
+            // v0.1.0/v0.1.1 CI builds used ephemeral debug signatures. v0.1.2 starts a stable preview track.
+            applicationIdSuffix = ".preview2"
+            manifestPlaceholders["appDisplayName"] = "TriLingual AI 0.1.2"
+            signingConfig = signingConfigs.getByName("previewStable")
         }
         getByName("release") {
             isMinifyEnabled = false

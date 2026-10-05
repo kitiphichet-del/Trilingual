@@ -1,3 +1,11 @@
+## v0.1.2 — แก้จีน → ไทย
+
+- เมื่อเลือก 中文 ระบบใช้ zh-CN; ถ้ารู้จำเสียงออฟไลน์ภาษาจีนไม่พร้อม จะสลับไปบริการรู้จำเสียงระบบแบบ Hybrid แทนการหยุดเซสชัน
+- AI ออนไลน์ระบุ Simplified Chinese → Thai ชัดเจน และกำหนดผลลัพธ์เป็นอักษรไทย ไม่ใช่ pinyin
+- เครื่องที่ Auto language detection ไม่พร้อมจะแนะนำให้เลือก 中文 โดยตรง
+- เริ่ม stable debug signing ที่ v0.1.2 สำหรับสาย preview2 เพื่อให้รุ่นถัดไปอัปเดตทับกันได้
+- preview keystore เป็น debug-only และห้ามใช้กับ production
+
 # TriLingual AI Android — v0.1.1 (Hybrid starter)
 
 โครงการแอปแปลเสียงไทย/English/中文（简体） เป็นโค้ด Android จริง ไม่ใช่ภาพตัวอย่างเว็บ

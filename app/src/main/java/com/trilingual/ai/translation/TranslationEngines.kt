@@ -5,6 +5,7 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import com.trilingual.ai.data.UserSettings
+import com.trilingual.ai.util.Language
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -75,12 +76,21 @@ class OnlineTextAi(private val settings: UserSettings) {
         } finally { conn.disconnect() }
     }
 
-    suspend fun translate(text: String, from: String, to: String): String = request(
-        "You are a precise interpreter. Translate only from $from to $to. " +
-            "Chinese output must use Simplified characters. Return the translation only, no notes. " +
-            "Preserve names and terminology. Terminology hints: ${settings.glossary.take(1000)}",
-        text.take(4000), 1400
-    )
+    suspend fun translate(text: String, from: String, to: String): String {
+        val sourceName = Language.promptName(from)
+        val targetName = Language.promptName(to)
+        val outputRule = when (to) {
+            "th" -> "Output natural Thai script only. Never output pinyin, romanization, Chinese characters, explanations, or labels unless a proper name must be preserved."
+            "zh" -> "Output Simplified Chinese characters only. Never output Traditional Chinese or pinyin unless the source explicitly asks for pinyin."
+            else -> "Output natural English only. Do not add explanations or labels."
+        }
+        return request(
+            "You are a precise real-time interpreter. Source language: $sourceName. Target language: $targetName. " +
+                "$outputRule Return only the translation. Preserve names, numbers, and terminology. " +
+                "Terminology hints: ${settings.glossary.take(1000)}",
+            text.take(4000), 1400
+        )
+    }
     suspend fun summarize(transcript: String): String = request(
         "Summarize a multilingual meeting in Thai. Include main topics, decisions, and next actions. " +
             "Do not invent decisions. If uncertain, say so. Use clear bullet points.",

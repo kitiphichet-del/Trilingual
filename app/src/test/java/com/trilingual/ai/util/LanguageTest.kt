@@ -12,5 +12,7 @@ class LanguageTest {
     @Test fun fallback() {
         assertEquals("zh", Language.detectText("!", "zh"))
         assertEquals("zh-CN", Language.tag("zh"))
+        assertEquals("Simplified Chinese (zh-CN)", Language.promptName("zh"))
+        assertEquals("Thai (th-TH)", Language.promptName("th"))
     }
 }

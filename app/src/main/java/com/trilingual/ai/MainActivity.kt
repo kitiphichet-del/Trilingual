@@ -187,7 +187,7 @@ class MainActivity : ComponentActivity() {
                     Column { Text("TriLingual AI", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text("ไทย  ·  English  ·  简体中文", style = MaterialTheme.typography.labelSmall) }
                     Spacer(Modifier.weight(1f))
-                    Text("v0.1.1", color = Color.Gray, fontSize = 12.sp)
+                    Text("v0.1.2", color = Color.Gray, fontSize = 12.sp)
                 }
             } },
             bottomBar = { NavigationBar {
@@ -216,7 +216,16 @@ class MainActivity : ComponentActivity() {
                                         label = { Text(if (code == "zh") "中文" else if (code == "en") "EN" else if (code == "auto") "Auto*" else "ไทย", fontSize = 12.sp) })
                                 }
                             }
-                            if (selectedLanguage == "auto" || live.language == "auto") Text("*Auto ขึ้นอยู่กับ Android 14+ และบริการรู้จำเสียงของเครื่อง รุ่นเก่าเริ่มที่ภาษาไทย", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                            val activeLanguage = if (live.running) live.language else selectedLanguage
+                            if (activeLanguage == "auto") Text(
+                                if (Build.VERSION.SDK_INT >= 34) "*Auto ใช้ความสามารถตรวจจับภาษาของ Android; หากจีนไม่ถูกจับให้เลือก 中文 โดยตรง"
+                                else "*เครื่องรุ่นนี้ไม่มี Auto language detection แบบเต็ม สำหรับจีน → ไทย กรุณาเลือก 中文 ก่อนพูด",
+                                style = MaterialTheme.typography.labelSmall, color = Color.Gray
+                            )
+                            if (activeLanguage == "zh") Text(
+                                "จีน → ไทย: ใช้ภาษาจีนกลาง (简体中文) · ถ้าชุดเสียงจีนออฟไลน์ไม่พร้อม แอปจะลองสลับเป็นบริการระบบแบบ Hybrid",
+                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary
+                            )
                             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
                                 Column(Modifier.padding(14.dp)) {
                                     Text(live.status, color = if (live.running) MaterialTheme.colorScheme.primary else Color.DarkGray)
@@ -410,7 +419,7 @@ class MainActivity : ComponentActivity() {
             Text("คำบรรยายลอย", style = MaterialTheme.typography.titleMedium)
             OutlinedButton(onClick = { onOverlay(!prefs.overlayEnabled) }) { Text(if (prefs.overlayEnabled) "ปิด Overlay" else "ขอสิทธิ์และเปิด Overlay") }
             Text("ต้องอนุญาต ‘แสดงทับแอปอื่น’ ในการตั้งค่า Android; PiP ใช้ได้จากหน้า ‘นำเสนอ’", fontSize = 12.sp, color = Color.Gray)
-            Text("เวอร์ชัน 0.1.0 · รุ่นเริ่มต้นเพื่อทดสอบบนโทรศัพท์จริง", color = Color.Gray, fontSize = 12.sp)
+            Text("เวอร์ชัน 0.1.2 · ปรับปรุงจีน → ไทยและ Hybrid speech fallback", color = Color.Gray, fontSize = 12.sp)
         }
     }
 }
