@@ -12,8 +12,8 @@ android {
         applicationId = "com.trilingual.ai"
         minSdk = 29
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
@@ -28,7 +28,7 @@ android {
         getByName("debug") {
             // v0.1.0/v0.1.1 CI builds used ephemeral debug signatures. v0.1.2 starts a stable preview track.
             applicationIdSuffix = ".preview2"
-            manifestPlaceholders["appDisplayName"] = "TriLingual AI 0.1.2"
+            manifestPlaceholders["appDisplayName"] = "TriLingual AI 0.1.3"
             signingConfig = signingConfigs.getByName("previewStable")
         }
         getByName("release") {
