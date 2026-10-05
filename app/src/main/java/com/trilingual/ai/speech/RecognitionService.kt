@@ -34,10 +34,12 @@ class RecognitionService : Service(), RecognitionListener {
         const val ACTION_RESUME = "com.trilingual.ai.RESUME"
         const val ACTION_STOP = "com.trilingual.ai.STOP"
         const val ACTION_SPEAKER = "com.trilingual.ai.SPEAKER"
+        const val ACTION_AUTO_SPEAKER = "com.trilingual.ai.AUTO_SPEAKER"
         const val ACTION_LANGUAGE = "com.trilingual.ai.LANGUAGE"
         const val EXTRA_MODE = "mode"
         const val EXTRA_LANGUAGE = "language"
         const val EXTRA_SPEAKER = "speaker"
+        const val EXTRA_AUTO_SPEAKER = "autoSpeaker"
         private const val CHANNEL = "recording"
         private const val NOTICE_ID = 1402
     }
@@ -48,6 +50,9 @@ class RecognitionService : Service(), RecognitionListener {
     private var stopped = true
     private var useDevice = false
     private var systemFallbackUsed = false
+    private var noMatchCount = 0
+    private var autoSpeaker = true
+    private val autoSpeakerTracker = AutoSpeakerTracker()
     private var language = "th"
     private var detected = "th"
     private var speaker = 1
@@ -77,12 +82,15 @@ class RecognitionService : Service(), RecognitionListener {
                 language = intent.getStringExtra(EXTRA_LANGUAGE) ?: "th"
                 detected = if (language == "auto") "th" else language
                 speaker = 1
+                autoSpeaker = true
+                autoSpeakerTracker.reset()
+                noMatchCount = 0
                 useDevice = app.settings.onDevice
                 systemFallbackUsed = false
                 meetingId = app.store.newMeeting(intent.getStringExtra(EXTRA_MODE) ?: "conversation")
                 app.live.update { it.copy(meetingId = meetingId, running = true, paused = false,
                     mode = intent.getStringExtra(EXTRA_MODE) ?: "conversation", language = language,
-                    speaker = speaker, status = "กำลังเริ่มไมโครโฟน…", partial = "") }
+                    speaker = speaker, autoSpeaker = autoSpeaker, status = "กำลังเริ่มไมโครโฟน…", partial = "") }
                 startForeground(NOTICE_ID, notification())
                 createRecognizer()
                 if (!stopped) startRecognition()
@@ -110,9 +118,15 @@ class RecognitionService : Service(), RecognitionListener {
                 recognizer?.cancel()
                 scheduleRestart(550)
             }
+            ACTION_AUTO_SPEAKER -> {
+                autoSpeaker = intent.getBooleanExtra(EXTRA_AUTO_SPEAKER, true)
+                if (autoSpeaker) autoSpeakerTracker.reset()
+                app.live.update { it.copy(autoSpeaker = autoSpeaker) }
+            }
             ACTION_SPEAKER -> {
+                autoSpeaker = false
                 speaker = intent.getIntExtra(EXTRA_SPEAKER, 1).coerceIn(1, 8)
-                app.live.update { it.copy(speaker = speaker) }
+                app.live.update { it.copy(speaker = speaker, autoSpeaker = false) }
             }
             ACTION_STOP -> endSession()
         }
@@ -181,6 +195,9 @@ class RecognitionService : Service(), RecognitionListener {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Language.tag(detected))
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 900L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 750L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1250L)
             if (Build.VERSION.SDK_INT >= 33 && app.settings.glossary.isNotBlank()) {
                 putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, ArrayList(app.settings.glossary.split(',', '\n').map { it.trim() }.filter { it.isNotBlank() }.take(40)))
             }
@@ -208,7 +225,7 @@ class RecognitionService : Service(), RecognitionListener {
     }
 
     override fun onReadyForSpeech(params: Bundle?) { app.live.update { it.copy(status = "กำลังฟัง…") } }
-    override fun onBeginningOfSpeech() { app.live.update { it.copy(status = "ตรวจพบเสียงพูด") } }
+    override fun onBeginningOfSpeech() { noMatchCount = 0; app.live.update { it.copy(status = "ตรวจพบเสียงพูด") } }
     override fun onRmsChanged(rmsdB: Float) { app.live.update { it.copy(loudness = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)) } }
     override fun onBufferReceived(buffer: ByteArray?) = Unit
     override fun onEndOfSpeech() { app.live.update { it.copy(status = "กำลังประมวลผลประโยค…") } }
@@ -218,6 +235,18 @@ class RecognitionService : Service(), RecognitionListener {
         if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
             app.live.update { it.copy(status = "ไม่มีสิทธิ์ใช้ไมโครโฟน (ข้อผิดพลาด $error)") }
             endSession(); return
+        }
+        if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+            noMatchCount += 1
+            app.live.update { it.copy(partial = "", status = "กำลังฟัง…") }
+            if (noMatchCount >= 4) {
+                noMatchCount = 0
+                runCatching { recognizer?.destroy() }
+                recognizer = null
+                createRecognizer()
+                scheduleRestart(500)
+            } else scheduleRestart(280)
+            return
         }
         if ((error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
                 error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) && useDevice) {
@@ -229,17 +258,27 @@ class RecognitionService : Service(), RecognitionListener {
             app.live.update { it.copy(status = "บริการรู้จำเสียงของเครื่องไม่รองรับ ${Language.label(if (language == "auto") detected else language)} (รหัส $error)") }
             endSession(); return
         }
-        // No-match and end-of-speech are expected during an ongoing conversation.
-        val wait = if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_TOO_MANY_REQUESTS) 2000L else 850L
-        app.live.update { it.copy(partial = "", status = "กำลังเชื่อมต่อการฟังอีกครั้ง (รหัส $error)") }
+        val wait = when (error) {
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1200L
+            SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> 3200L
+            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> 1500L
+            else -> 850L
+        }
+        val message = when (error) {
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ระบบฟังเสียงกำลังยุ่ง · กำลังลองใหม่"
+            SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> "ระบบรับคำขอถี่เกินไป · รอสักครู่แล้วฟังต่อ"
+            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "เครือข่ายสะดุด · กำลังเชื่อมต่อใหม่"
+            else -> "กำลังเริ่มการฟังใหม่"
+        }
+        app.live.update { it.copy(partial = "", status = message) }
         scheduleRestart(wait)
     }
     override fun onResults(results: Bundle?) {
         listening = false
         val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
         app.live.update { it.copy(partial = "") }
-        if (!stopped && !app.live.view.value.paused && text.isNotEmpty()) persistAndTranslate(text)
-        scheduleRestart(450)
+        if (!stopped && !app.live.view.value.paused && text.isNotEmpty()) { noMatchCount = 0; persistAndTranslate(text) }
+        scheduleRestart(320)
     }
     override fun onPartialResults(partialResults: Bundle?) {
         val str = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
@@ -256,8 +295,11 @@ class RecognitionService : Service(), RecognitionListener {
 
     private fun persistAndTranslate(source: String) {
         val id = meetingId
-        val sp = speaker
         val lang = Language.detectText(source, detected)
+        val sp = if (autoSpeaker) autoSpeakerTracker.assign(lang).also { assigned ->
+            speaker = assigned
+            app.live.update { it.copy(speaker = assigned, autoSpeaker = true) }
+        } else speaker
         // Persist before starting potentially slow translations; serialized on service main thread.
         val phraseId = app.store.addPhrase(id, sp, lang, source)
         val seq = sequence.incrementAndGet()
